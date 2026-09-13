@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="theme-color" content="#f5f6ef">
+    <meta name="description" content="TailVault is a macOS GUI for Setec. Browse, create and manage secrets using your Mac’s existing Tailscale identity.">
+    <meta property="og:title" content="TailVault — A macOS GUI for Setec">
+    <meta property="og:description" content="Browse, create and manage your Setec secrets in a Mac app. Install with Homebrew.">
+    <meta property="og:type" content="website">
+    <title>TailVault — A macOS GUI for Setec</title>
+    <!-- CSS, JavaScript and the app icon are self-contained. Keep the three WebP screenshots beside this file. -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJhY2tncm91bmQiIHgyPSIwIiB5Mj0iMSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMzNzNkM2UiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMTcxYzFkIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJpbGx1bWluYXRlZCIgeDI9IjAiIHkyPSIxIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iI2I1ZjRkOSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3OWNkYjEiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJnbG93IiB4PSItMzAlIiB5PSItMzAlIiB3aWR0aD0iMTYwJSIgaGVpZ2h0PSIxNjAlIj4KICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC43Ii8+CiAgICAgIDxmZU1lcmdlPjxmZU1lcmdlTm9kZS8+PGZlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9mZU1lcmdlPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxyZWN0IHg9Ii41IiB5PSIuNSIgd2lkdGg9IjYzIiBoZWlnaHQ9IjYzIiByeD0iMTUuNSIgZmlsbD0idXJsKCNiYWNrZ3JvdW5kKSIgc3Ryb2tlPSIjNWI2NTYyIi8+CiAgPGcgZmlsbD0iIzIwNDc0MCIgc3Ryb2tlPSIjMzU1YjUyIiBzdHJva2Utd2lkdGg9Ii42Ij4KICAgIDxjaXJjbGUgY3g9IjIwIiBjeT0iMTQiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iNDQiIGN5PSIyNiIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjM4IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjQ0IiBjeT0iNTAiIHI9IjQuNSIvPgogIDwvZz4KICA8ZyBmaWxsPSJ1cmwoI2lsbHVtaW5hdGVkKSIgc3Ryb2tlPSIjYjVlZmQ2IiBzdHJva2Utd2lkdGg9Ii42IiBmaWx0ZXI9InVybCgjZ2xvdykiPgogICAgPGNpcmNsZSBjeD0iMzIiIGN5PSIxNCIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSI0NCIgY3k9IjE0IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjIwIiBjeT0iMjYiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iMzIiIGN5PSIyNiIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjM4IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjQ0IiBjeT0iMzgiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iMjAiIGN5PSI1MCIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjUwIiByPSI0LjUiLz4KICA8L2c+Cjwvc3ZnPgo=">
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #f5f6ef;
+        --ink: #19392e;
+        --muted: #52645b;
+        --line: #d8dfd4;
+        --accent: #236c50;
+        --mint: #b5ead0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-synthesis: none;
+        -webkit-font-smoothing: antialiased;
+        color: var(--ink);
+        background: var(--paper);
+      }
+
+      *, *::before, *::after { box-sizing: border-box; }
+      body { margin: 0; }
+      button, a { -webkit-tap-highlight-color: transparent; }
+      button { font: inherit; }
+      a { color: inherit; text-underline-offset: 4px; }
+      a:hover { color: var(--accent); }
+      button, a { touch-action: manipulation; }
+      button { cursor: pointer; }
+      button:focus-visible, a:focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 5px;
+      }
+      ::selection { color: var(--ink); background: var(--mint); }
+      [hidden] { display: none !important; }
+      .wrap { width: min(1184px, calc(100% - 80px)); margin-inline: auto; }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+      .skip-link {
+        position: fixed;
+        z-index: 10;
+        top: 16px;
+        left: 16px;
+        padding: 12px 18px;
+        border-radius: 6px;
+        background: var(--ink);
+        color: white;
+        transform: translateY(-160%);
+      }
+      .skip-link:focus { transform: none; color: white; }
+      .site-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        padding-block: 29px;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { display: inline-flex; align-items: center; gap: 11px; }
+      .brand img { width: 38px; height: 38px; }
+      .wordmark { font-size: 25px; font-weight: 650; letter-spacing: -1.1px; }
+      .wordmark span { font-weight: 300; }
+      .github-link { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 550; text-decoration: none; padding-block: 10px; }
+      .github-link svg { width: 17px; height: 17px; }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.3fr 1fr;
+        align-items: end;
+        gap: 64px;
+        padding-block: 76px 65px;
+      }
+      h1 { margin: 0; font-size: clamp(42px, 4.9vw, 67px); line-height: 1.055; font-weight: 560; letter-spacing: -3px; }
+      h1 span { display: block; color: var(--accent); }
+      .intro { max-width: 540px; margin: 24px 0 0; font-size: 18px; line-height: 1.65; color: var(--muted); }
+      .intro a { color: var(--ink); text-decoration-color: #8b9e8c; }
+      .install { padding-bottom: 4px; min-width: 0; }
+      .install h2 { margin: 0 0 14px; font-size: 15px; font-weight: 600; }
+      .command {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 13px 13px 13px 20px;
+        border: 1px solid #355547;
+        border-radius: 10px;
+        color: #e9f4e9;
+        background: #183a2c;
+      }
+      .command code { flex: 1; min-width: 0; font: 13px/1.8 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace; overflow-wrap: anywhere; user-select: all; }
+      .copy-button { flex: 0 0 38px; display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #628570; border-radius: 6px; color: #c5e8d4; background: transparent; }
+      .copy-button:hover { background: #2e5340; }
+      .copy-button:focus-visible { outline-color: var(--mint); outline-offset: 3px; }
+      .copy-button svg { width: 17px; height: 17px; }
+      .copy-button .check { display: none; }
+      .copy-button[data-copied="true"] .check { display: block; }
+      .copy-button[data-copied="true"] .copy { display: none; }
+      .install-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin: 14px 0 0; font-size: 12px; line-height: 1.6; color: var(--muted); }
+      .install-meta span + span { padding-left: 16px; border-left: 1px solid #bccabb; }
+      .setup { margin: 16px 0 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+      .copy-status { min-height: 0; margin: 0; font-size: 13px; line-height: 1.5; color: var(--accent); }
+      .copy-status:not(:empty) { margin-top: 10px; }
+
+      .gallery { padding-bottom: 38px; }
+      .gallery-tabs { display: flex; align-items: stretch; gap: 30px; margin-bottom: 22px; border-bottom: 1px solid var(--line); }
+      .gallery-tabs button { position: relative; display: inline-flex; align-items: center; gap: 9px; padding: 15px 0 17px; border: 0; background: transparent; color: var(--muted); font-size: 14px; font-weight: 500; }
+      .gallery-tabs button svg { width: 17px; height: 17px; }
+      .gallery-tabs button[aria-selected="true"] { color: var(--ink); font-weight: 600; }
+      .gallery-tabs button[aria-selected="true"]::after { content: ""; position: absolute; inset: auto 0 -1px; height: 2px; background: var(--accent); }
+      .gallery-tabs button:hover { color: var(--accent); }
+      .screen { margin: 0; }
+      .screen + .screen { margin-top: 28px; }
+      .gallery-tabs:not([hidden]) ~ .screen { margin-top: 0; }
+      .screenshot-link { display: block; border-radius: 13px; overflow: hidden; background: #233d32; box-shadow: 0 2px 4px #142b2012, 0 14px 35px -22px #203d354d; }
+      .screenshot-link img { display: block; width: 100%; height: auto; aspect-ratio: 3024 / 2208; }
+      figcaption { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; padding-block: 19px 5px; font-size: 13px; line-height: 1.65; color: var(--muted); }
+      figcaption p { margin: 0; }
+      figcaption a { flex-shrink: 0; font-size: 12px; text-decoration-color: #a3b3a4; }
+
+      .site-footer { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 27px 34px; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.6; color: var(--muted); }
+      .permissions { display: flex; align-items: center; gap: 11px; margin: 0; }
+      .permissions svg { width: 18px; height: 18px; flex-shrink: 0; color: var(--accent); }
+      .permissions strong { font-weight: 550; color: var(--ink); }
+      .footer-links { display: flex; gap: 22px; flex-shrink: 0; }
+      .footer-links a { text-decoration: none; }
+
+      @media (max-width: 1020px) {
+        .hero { gap: 35px; grid-template-columns: 1.15fr 1fr; }
+        h1 { font-size: 54px; letter-spacing: -2.3px; }
+        .intro { font-size: 17px; }
+        .command { padding-left: 15px; gap: 10px; }
+        .command code { font-size: 12px; }
+      }
+      @media (max-width: 760px) {
+        .wrap { width: calc(100% - 40px); }
+        .site-header { padding-block: 21px; }
+        .brand img { width: 33px; height: 33px; }
+        .wordmark { font-size: 23px; }
+        .hero { grid-template-columns: 1fr; gap: 30px; padding-block: 45px 30px; }
+        h1 { font-size: clamp(41px, 7.6vw, 55px); letter-spacing: -2px; }
+        .intro { margin-top: 20px; max-width: 530px; font-size: 16px; }
+        .install { max-width: 480px; }
+        .command code { font-size: 13px; }
+        .setup { margin-top: 12px; }
+        .gallery { padding-bottom: 24px; }
+        .gallery-tabs { gap: 24px; margin-bottom: 16px; }
+        .gallery-tabs button { font-size: 12px; padding-block: 14px; gap: 6px; }
+        .gallery-tabs button svg { display: none; }
+        .screenshot-link { border-radius: 8px; }
+        figcaption { align-items: flex-start; font-size: 12px; padding-top: 14px; }
+        .site-footer { align-items: flex-start; flex-direction: column; gap: 18px; padding-block: 22px 26px; }
+      }
+      @media (max-width: 390px) {
+        .wrap { width: calc(100% - 32px); }
+        .command code { font-size: 12px; }
+        .gallery-tabs { justify-content: space-between; gap: 8px; }
+        figcaption { flex-direction: column; gap: 6px; }
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .copy-button, .gallery-tabs button { transition: background-color .15s, color .15s; }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header wrap">
+      <div class="brand" aria-label="TailVault">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImJhY2tncm91bmQiIHgyPSIwIiB5Mj0iMSI+CiAgICAgIDxzdG9wIHN0b3AtY29sb3I9IiMzNzNkM2UiLz4KICAgICAgPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMTcxYzFkIi8+CiAgICA8L2xpbmVhckdyYWRpZW50PgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJpbGx1bWluYXRlZCIgeDI9IjAiIHkyPSIxIj4KICAgICAgPHN0b3Agc3RvcC1jb2xvcj0iI2I1ZjRkOSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiM3OWNkYjEiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgICA8ZmlsdGVyIGlkPSJnbG93IiB4PSItMzAlIiB5PSItMzAlIiB3aWR0aD0iMTYwJSIgaGVpZ2h0PSIxNjAlIj4KICAgICAgPGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iMC43Ii8+CiAgICAgIDxmZU1lcmdlPjxmZU1lcmdlTm9kZS8+PGZlTWVyZ2VOb2RlIGluPSJTb3VyY2VHcmFwaGljIi8+PC9mZU1lcmdlPgogICAgPC9maWx0ZXI+CiAgPC9kZWZzPgogIDxyZWN0IHg9Ii41IiB5PSIuNSIgd2lkdGg9IjYzIiBoZWlnaHQ9IjYzIiByeD0iMTUuNSIgZmlsbD0idXJsKCNiYWNrZ3JvdW5kKSIgc3Ryb2tlPSIjNWI2NTYyIi8+CiAgPGcgZmlsbD0iIzIwNDc0MCIgc3Ryb2tlPSIjMzU1YjUyIiBzdHJva2Utd2lkdGg9Ii42Ij4KICAgIDxjaXJjbGUgY3g9IjIwIiBjeT0iMTQiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iNDQiIGN5PSIyNiIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIyMCIgY3k9IjM4IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjQ0IiBjeT0iNTAiIHI9IjQuNSIvPgogIDwvZz4KICA8ZyBmaWxsPSJ1cmwoI2lsbHVtaW5hdGVkKSIgc3Ryb2tlPSIjYjVlZmQ2IiBzdHJva2Utd2lkdGg9Ii42IiBmaWx0ZXI9InVybCgjZ2xvdykiPgogICAgPGNpcmNsZSBjeD0iMzIiIGN5PSIxNCIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSI0NCIgY3k9IjE0IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjIwIiBjeT0iMjYiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iMzIiIGN5PSIyNiIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjM4IiByPSI0LjUiLz4KICAgIDxjaXJjbGUgY3g9IjQ0IiBjeT0iMzgiIHI9IjQuNSIvPgogICAgPGNpcmNsZSBjeD0iMjAiIGN5PSI1MCIgcj0iNC41Ii8+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjUwIiByPSI0LjUiLz4KICA8L2c+Cjwvc3ZnPgo=" width="38" height="38" alt="">
+        <span class="wordmark" aria-hidden="true">Tail<span>Vault</span></span>
+      </div>
+      <a class="github-link" href="https://github.com/angerops/tailvault">
+        GitHub
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 18 18 6M6 6h12v12"/></svg>
+      </a>
+    </header>
+
+    <main id="main" class="wrap">
+      <section class="hero" aria-labelledby="page-title">
+        <div>
+          <h1 id="page-title">A macOS GUI<span>for Setec.</span></h1>
+          <p class="intro">TailVault is a graphical interface for <a href="https://github.com/tailscale/setec">Setec</a>. Browse, create and manage secrets using your Mac’s existing Tailscale identity.</p>
+        </div>
+        <div class="install">
+          <h2>Install with Homebrew</h2>
+          <div class="command">
+            <code id="install-command">brew install angerops/tap/tailvault</code>
+            <button class="copy-button" id="copy-command" type="button" aria-label="Copy Homebrew install command" title="Copy command" hidden>
+              <svg class="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+              <svg class="check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+            </button>
+          </div>
+          <p class="copy-status" id="copy-status" role="status" aria-live="polite"></p>
+          <p class="install-meta"><span>macOS 15 Sequoia or later</span><span>Apple silicon</span></p>
+          <p class="setup">Connect Tailscale, then enter your Setec server in the app.</p>
+        </div>
+      </section>
+
+      <section class="gallery" aria-label="TailVault screenshots">
+        <div class="gallery-tabs" role="tablist" aria-label="Explore TailVault" hidden>
+          <button type="button" role="tab" id="tab-secrets" aria-controls="screen-secrets" aria-selected="true" tabindex="0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18M13 8h4M13 12h4M13 16h3"/></svg>
+            Browse secrets
+          </button>
+          <button type="button" role="tab" id="tab-new" aria-controls="screen-new" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            Create &amp; upload
+          </button>
+          <button type="button" role="tab" id="tab-terminal" aria-controls="screen-terminal" aria-selected="false" tabindex="-1">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 6 6-6 6M13 18h7"/></svg>
+            Use in terminal
+          </button>
+        </div>
+
+        <figure class="screen" id="screen-secrets">
+          <a class="screenshot-link" href="./secrets.webp" aria-label="Open full-size screenshot of browsing secrets">
+            <img src="./secrets.webp" width="3024" height="2208" fetchpriority="high" alt="TailVault showing secret paths in the sidebar and redis-password selected, with its value hidden and controls to reveal, copy or download it.">
+          </a>
+          <figcaption><p>Browse paths, reveal values and manage versions.</p><a href="./secrets.webp">View full size →</a></figcaption>
+        </figure>
+        <figure class="screen" id="screen-new">
+          <a class="screenshot-link" href="./new-secret.webp" aria-label="Open full-size screenshot of creating a secret">
+            <img src="./new-secret.webp" width="3024" height="2208" loading="lazy" alt="TailVault’s New secret dialog with a secret path, a value field, a password generator and a file upload area.">
+          </a>
+          <figcaption><p>Create a secret from text, generate a password or upload a file.</p><a href="./new-secret.webp">View full size →</a></figcaption>
+        </figure>
+        <figure class="screen" id="screen-terminal">
+          <a class="screenshot-link" href="./terminal.webp" aria-label="Open full-size screenshot of the curl command">
+            <img src="./terminal.webp" width="3024" height="2208" loading="lazy" alt="TailVault’s Use in terminal tab showing a curl command for fetching redis-password, with version and output options.">
+          </a>
+          <figcaption><p>Copy a curl command to fetch a secret using the caller’s Tailscale permissions.</p><a href="./terminal.webp">View full size →</a></figcaption>
+        </figure>
+      </section>
+    </main>
+
+    <footer class="site-footer wrap">
+      <p class="permissions">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 3v6c0 4-5 8-8 9-3-1-8-5-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/></svg>
+        <span><strong>Access controlled by Setec.</strong> The same path permissions as the CLI.</span>
+      </p>
+      <nav class="footer-links" aria-label="Project links"><a href="https://github.com/tailscale/setec">About Setec ↗</a><a href="https://github.com/angerops/tailvault">Source code ↗</a></nav>
+    </footer>
+
+    <script>
+      (() => {
+        const tablist = document.querySelector('[role="tablist"]');
+        const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+        const panels = tabs.map(tab => document.getElementById(tab.getAttribute('aria-controls')));
+
+        function selectTab(index, focus = false) {
+          tabs.forEach((tab, position) => {
+            const selected = position === index;
+            tab.setAttribute('aria-selected', String(selected));
+            tab.tabIndex = selected ? 0 : -1;
+            panels[position].hidden = !selected;
+          });
+          if (focus) tabs[index].focus();
+        }
+
+        tabs.forEach((tab, index) => {
+          panels[index].setAttribute('role', 'tabpanel');
+          panels[index].setAttribute('aria-labelledby', tab.id);
+          tab.addEventListener('click', () => selectTab(index));
+          tab.addEventListener('keydown', event => {
+            let next;
+            if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+            if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = tabs.length - 1;
+            if (next === undefined) return;
+            event.preventDefault();
+            selectTab(next, true);
+          });
+        });
+        selectTab(0);
+        tablist.hidden = false;
+
+        const copyButton = document.getElementById('copy-command');
+        const notice = document.getElementById('copy-status');
+        const command = document.getElementById('install-command').textContent;
+        let resetCopy;
+
+        // Also works when index.html is opened directly from disk.
+        function copyWithoutClipboardAPI() {
+          const previousFocus = document.activeElement;
+          const field = document.createElement('textarea');
+          field.value = command;
+          field.readOnly = true;
+          field.style.cssText = 'position:fixed;top:0;left:-9999px;font-size:16px;';
+          document.body.append(field);
+          field.select();
+          let copied = false;
+          try { copied = document.execCommand('copy'); }
+          finally { field.remove(); previousFocus?.focus({ preventScroll: true }); }
+          if (!copied) throw new Error('Copy unavailable');
+        }
+
+        copyButton.hidden = false;
+        copyButton.addEventListener('click', async () => {
+          clearTimeout(resetCopy);
+          try {
+            try {
+              if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
+              await navigator.clipboard.writeText(command);
+            } catch {
+              copyWithoutClipboardAPI();
+            }
+            copyButton.dataset.copied = 'true';
+            copyButton.setAttribute('aria-label', 'Homebrew command copied');
+            copyButton.title = 'Copied';
+            notice.textContent = '';
+            resetCopy = setTimeout(() => {
+              delete copyButton.dataset.copied;
+              copyButton.setAttribute('aria-label', 'Copy Homebrew install command');
+              copyButton.title = 'Copy command';
+              notice.textContent = '';
+            }, 2200);
+          } catch {
+            notice.textContent = 'Select the command, then press ⌘C or Ctrl+C to copy.';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,18 @@
+# Generated application bundles and archives
+/bin/
+
+# Development dependencies and test output
+/node_modules/
+/test-results/
+/coverage/
+__pycache__/
+*.log
+
+# Local configuration and editor files
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

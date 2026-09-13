@@ -1,0 +1,170 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: >-
+      (github.repository == 'angerops/tailvault' || github.repository == 'angerops/tailvault-prerelease') &&
+      (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: macos-15
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+      archive_sha256: ${{ steps.build.outputs.archive_sha256 }}
+      version: ${{ steps.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Test and build the exact release revision without credentials
+        id: build
+        run: bash scripts/ci-release.sh --release-input
+      - name: Transfer only the unsigned app and its identity manifest
+        id: artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tailvault-unsigned-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            bin/signing-input/TailVault-unsigned.zip
+            bin/signing-input/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+
+  sign:
+    needs: validate
+    runs-on: macos-15
+    environment: macos-release
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ needs.validate.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            scripts/release-artifact.py
+            scripts/check-macos-target.py
+            scripts/prepare-github-signing.py
+            scripts/sign-macos-app.sh
+      - name: Download the artifact from this validation job
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          artifact-ids: ${{ needs.validate.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/tailvault-build-input
+      - name: Verify artifact identity, digest, paths, and macOS target before importing keys
+        env:
+          EXPECTED_ARCHIVE_SHA256: ${{ needs.validate.outputs.archive_sha256 }}
+        run: |
+          /usr/bin/python3 -I scripts/release-artifact.py unpack \
+            --input "$RUNNER_TEMP/tailvault-build-input" --output "$RUNNER_TEMP/tailvault-app"
+      - name: Prepare private signing inputs
+        env:
+          CODESIGN_IDENTITY: ${{ vars.CODESIGN_IDENTITY }}
+          CODESIGN_CERTIFICATE_BASE64: ${{ secrets.CODESIGN_CERTIFICATE_BASE64 }}
+          CODESIGN_PRIVATE_KEY_BASE64: ${{ secrets.CODESIGN_PRIVATE_KEY_BASE64 }}
+          CODESIGN_PRIVATE_KEY_PASSWORD: ${{ secrets.CODESIGN_PRIVATE_KEY_PASSWORD }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+          NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ vars.NOTARY_ISSUER_ID }}
+        run: |
+          /usr/bin/python3 -I scripts/prepare-github-signing.py
+          printf 'CODESIGN_KEYCHAIN=%s/tailvault-signing.keychain\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+      - name: Create the job-owned temporary keychain
+        run: |
+          /usr/bin/security create-keychain -p "$KEYCHAIN_PASSWORD" "$CODESIGN_KEYCHAIN"
+          /usr/bin/security set-keychain-settings -lut 3600 "$CODESIGN_KEYCHAIN"
+      - name: Import Developer ID into a temporary keychain
+        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
+        with:
+          keychain: ${{ runner.temp }}/tailvault-signing
+          create-keychain: false
+          keychain-password: ${{ env.KEYCHAIN_PASSWORD }}
+          p12-filepath: ${{ runner.temp }}/tailvault-signing-inputs/signing.p12
+          p12-password: ${{ env.KEYCHAIN_PASSWORD }}
+      - name: Validate and store notarization credentials in the temporary keychain
+        env:
+          NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ vars.NOTARY_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          test -f "$CODESIGN_KEYCHAIN"
+          xcrun notarytool store-credentials tailvault-ci \
+            --key "$RUNNER_TEMP/tailvault-signing-inputs/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+            --keychain "$CODESIGN_KEYCHAIN"
+          rm -rf -- "$RUNNER_TEMP/tailvault-signing-inputs"
+      - name: Sign, notarize, staple, and verify the already-built app
+        env:
+          CODESIGN_IDENTITY: ${{ vars.CODESIGN_IDENTITY }}
+          NOTARYTOOL_PROFILE: tailvault-ci
+        run: |
+          /bin/sh scripts/sign-macos-app.sh "$RUNNER_TEMP/tailvault-app/TailVault.app" \
+            "$RUNNER_TEMP/tailvault-notarization.json"
+      - name: Delete credentials before packaging or uploading artifacts
+        if: always()
+        run: /usr/bin/python3 -I scripts/prepare-github-signing.py --cleanup
+      - name: Package the verified app without rebuilding or executing it
+        run: |
+          /usr/bin/python3 -I scripts/release-artifact.py finalize \
+            --app "$RUNNER_TEMP/tailvault-app/TailVault.app" \
+            --report "$RUNNER_TEMP/tailvault-notarization.json" --output bin/release
+      - name: Retain verified build and notarization evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tailvault-signed-${{ github.sha }}
+          path: |
+            bin/release/TailVault-v*-macos-arm64.zip
+            bin/release/SHA256SUMS
+            bin/release/notarization.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: tailvault-signed-${{ github.sha }}
+          path: bin/release
+      - name: Publish verified artifacts through a resumable draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish-release.py
+      - name: Generate the cask for review
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          archive_name=$(awk '{print $2}' bin/published/SHA256SUMS)
+          python3 scripts/render-homebrew.py \
+            --repository "$GITHUB_REPOSITORY" --tag "$GITHUB_REF_NAME" \
+            --archive "bin/published/$archive_name" \
+            --output bin/release/homebrew/Casks/tailvault.rb
+      - name: Retain the generated cask without changing the public tap
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tailvault-cask-${{ github.sha }}
+          path: bin/release/homebrew/Casks/tailvault.rb
+          if-no-files-found: error
+          retention-days: 14

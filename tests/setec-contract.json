@@ -1,0 +1,382 @@
+[
+  {
+    "label": "list filters denied names",
+    "op": "list",
+    "body": {},
+    "status": 200,
+    "result": [
+      {
+        "Name": "finance/private/password",
+        "Versions": [
+          1
+        ],
+        "ActiveVersion": 1
+      }
+    ]
+  },
+  {
+    "label": "metadata grant does not grant value access",
+    "op": "get",
+    "body": {
+      "Name": "finance/private/password"
+    },
+    "status": 403
+  },
+  {
+    "label": "metadata only grant permits info",
+    "op": "info",
+    "body": {
+      "Name": "finance/private/password"
+    },
+    "status": 200,
+    "result": {
+      "Name": "finance/private/password",
+      "Versions": [
+        1
+      ],
+      "ActiveVersion": 1
+    }
+  },
+  {
+    "label": "create first version",
+    "op": "put",
+    "body": {
+      "Name": "personal/contract",
+      "Value": "YWxwaGE="
+    },
+    "status": 200,
+    "result": 1
+  },
+  {
+    "label": "list metadata",
+    "op": "list",
+    "body": {},
+    "status": 200,
+    "result": [
+      {
+        "Name": "finance/private/password",
+        "Versions": [
+          1
+        ],
+        "ActiveVersion": 1
+      },
+      {
+        "Name": "personal/contract",
+        "Versions": [
+          1
+        ],
+        "ActiveVersion": 1
+      }
+    ]
+  },
+  {
+    "label": "read default",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {
+      "Value": "YWxwaGE=",
+      "Version": 1
+    }
+  },
+  {
+    "label": "identical bytes reuse latest",
+    "op": "put",
+    "body": {
+      "Name": "personal/contract",
+      "Value": "YWxwaGE="
+    },
+    "status": 200,
+    "result": 1
+  },
+  {
+    "label": "new version starts inactive",
+    "op": "put",
+    "body": {
+      "Name": "personal/contract",
+      "Value": "YmV0YQ=="
+    },
+    "status": 200,
+    "result": 2
+  },
+  {
+    "label": "info confirms inactive",
+    "op": "info",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {
+      "Name": "personal/contract",
+      "Versions": [
+        1,
+        2
+      ],
+      "ActiveVersion": 1
+    }
+  },
+  {
+    "label": "read pinned version",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 2
+    },
+    "status": 200,
+    "result": {
+      "Value": "YmV0YQ==",
+      "Version": 2
+    }
+  },
+  {
+    "label": "activate version",
+    "op": "activate",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 2
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "cannot delete active",
+    "op": "delete-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 2
+    },
+    "status": 502
+  },
+  {
+    "label": "missing read",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 99
+    },
+    "status": 404
+  },
+  {
+    "label": "missing activation",
+    "op": "activate",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 99
+    },
+    "status": 404
+  },
+  {
+    "label": "delete inactive",
+    "op": "delete-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 1
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "deleted version remains claimed",
+    "op": "create-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 1,
+      "Value": "Z2FtbWE="
+    },
+    "status": 412
+  },
+  {
+    "label": "explicit version activates",
+    "op": "create-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 8,
+      "Value": "AP8="
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "binary preserved",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {
+      "Value": "AP8=",
+      "Version": 8
+    }
+  },
+  {
+    "label": "return to older active",
+    "op": "activate",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 2
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "delete highest version",
+    "op": "delete-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 8
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "put does not reuse deleted number",
+    "op": "put",
+    "body": {
+      "Name": "personal/contract",
+      "Value": "Z2FtbWE="
+    },
+    "status": 200,
+    "result": 9
+  },
+  {
+    "label": "create never used lower version",
+    "op": "create-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 5,
+      "Value": ""
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "empty bytes preserved",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {
+      "Value": "",
+      "Version": 5
+    }
+  },
+  {
+    "label": "delete missing version",
+    "op": "delete-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 88
+    },
+    "status": 404
+  },
+  {
+    "label": "claimed active version",
+    "op": "create-version",
+    "body": {
+      "Name": "personal/contract",
+      "Version": 5,
+      "Value": "eA=="
+    },
+    "status": 412
+  },
+  {
+    "label": "permission denied info",
+    "op": "info",
+    "body": {
+      "Name": "finance/hidden"
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied get",
+    "op": "get",
+    "body": {
+      "Name": "finance/hidden"
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied put",
+    "op": "put",
+    "body": {
+      "Name": "finance/hidden",
+      "Value": "eA=="
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied create-version",
+    "op": "create-version",
+    "body": {
+      "Name": "finance/hidden",
+      "Version": 1,
+      "Value": "eA=="
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied activate",
+    "op": "activate",
+    "body": {
+      "Name": "finance/hidden",
+      "Version": 1
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied delete",
+    "op": "delete",
+    "body": {
+      "Name": "finance/hidden"
+    },
+    "status": 403
+  },
+  {
+    "label": "permission denied delete-version",
+    "op": "delete-version",
+    "body": {
+      "Name": "finance/hidden",
+      "Version": 1
+    },
+    "status": 403
+  },
+  {
+    "label": "delete secret",
+    "op": "delete",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "delete secret is idempotent",
+    "op": "delete",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 200,
+    "result": {}
+  },
+  {
+    "label": "deleted secret unavailable",
+    "op": "get",
+    "body": {
+      "Name": "personal/contract"
+    },
+    "status": 404
+  },
+  {
+    "label": "recreate starts at one",
+    "op": "put",
+    "body": {
+      "Name": "personal/contract",
+      "Value": "eA=="
+    },
+    "status": 200,
+    "result": 1
+  }
+]

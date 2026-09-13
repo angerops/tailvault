@@ -1,0 +1,14 @@
+cask "tailvault" do
+  version "@VERSION@"
+  sha256 "@SHA256@"
+
+  url "https://github.com/@REPOSITORY@/releases/download/v#{version}/TailVault-v@APP_VERSION@-macos-arm64.zip"
+  name "TailVault"
+  desc "GUI for managing Setec secrets over Tailscale"
+  homepage "https://github.com/angerops/tailvault"
+
+  depends_on arch: :arm64
+  depends_on macos: :sequoia
+
+  app "TailVault.app"
+end
