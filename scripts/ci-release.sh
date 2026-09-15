@@ -3,12 +3,12 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 case "${1:-}" in
-  '') ;;
+  ''|--checks-only) ;;
   --release-input)
     VERSION=$(/usr/bin/python3 -I scripts/release-artifact.py version)
     export VERSION
     ;;
-  *) echo "Usage: $0 [--release-input]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [--checks-only|--release-input]" >&2; exit 2 ;;
 esac
 # GitHub runs this script only on its credential-free build worker.
 if [[ -n ${CODESIGN_KEYCHAIN:-}${KEYCHAIN_PASSWORD:-}${CODESIGN_PRIVATE_KEY_BASE64:-}${NOTARY_KEY_BASE64:-} ]]; then
@@ -71,6 +71,6 @@ make test check
 if [[ ${1:-} == --release-input ]]; then
   sh scripts/build-macos-app.sh --unsigned
   /usr/bin/python3 -I scripts/release-artifact.py package --app bin/unsigned/TailVault.app --output bin/signing-input
-else
+elif [[ ${1:-} != --checks-only ]]; then
   make build
 fi
