@@ -28,7 +28,7 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
-	h := &harness{who: Identity{UserID: 123, NodeID: 456, Name: "Alice", Login: "alice@example.test", IP: "100.64.0.1", TailnetName: "Example team", TailnetDNSName: "team.example.ts.net"}, commandStatus: 200, commandBody: []byte(`[]`)}
+	h := &harness{who: Identity{UserID: 123, NodeID: "n-fixture", Name: "Alice", Login: "alice@example.test", IP: "100.64.0.1", TailnetName: "Example team", TailnetDNSName: "team.example.ts.net"}, commandStatus: 200, commandBody: []byte(`[]`)}
 	var err error
 	h.app, err = New(Config{
 		Server:         "https://secrets.example.ts.net",
@@ -106,6 +106,51 @@ func TestNativeViewUsesTailscaleWithoutSignIn(t *testing.T) {
 	}
 }
 
+func TestOpeningDisplaysOnlySafeIdentityErrors(t *testing.T) {
+	h := newHarness(t)
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{IdentityError("Tailscale is disconnected. Connect Tailscale, then try again."), "Tailscale is disconnected. Connect Tailscale, then try again."},
+		{errors.New("synthetic credential marker"), "TailVault could not read Tailscale’s local connection. Check that Tailscale is connected, then try again."},
+	} {
+		h.identityError = tc.err
+		w := h.serve(h.request("GET", "/ui-api/session", "", ""))
+		if w.Code != 401 || strings.TrimSpace(w.Body.String()) != tc.want || h.app.view != nil || h.commandCalls != 0 {
+			t.Fatalf("incorrect opening error: %d %s", w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestCanceledOpeningCannotReplaceOrRevokeANewerView(t *testing.T) {
+	for _, identityError := range []error{nil, errors.New("late identity failure")} {
+		h := newHarness(t)
+		started, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
+		h.app.cfg.Identity = func(current context.Context) (Identity, error) {
+			if current == ctx {
+				close(started)
+				<-release
+				return h.who, identityError
+			}
+			return h.who, nil
+		}
+		go func() {
+			defer close(finished)
+			h.serve(h.request("GET", "/ui-api/session", "", "").WithContext(ctx))
+		}()
+		<-started
+		cancel()
+		token := h.open(t)
+		close(release)
+		<-finished
+		if h.app.view == nil || h.app.view.token != token {
+			t.Fatal("canceled opening disturbed the later view")
+		}
+	}
+}
+
 func TestNativeRequestsRejectForeignOriginsAndStaleViews(t *testing.T) {
 	h := newHarness(t)
 	token := h.open(t)
@@ -143,7 +188,7 @@ func TestIdentityChangeOfflineAndHideRevokeTheView(t *testing.T) {
 			case "user":
 				h.who.UserID++
 			case "node":
-				h.who.NodeID++
+				h.who.NodeID = "n-replacement"
 			case "ip":
 				h.who.IP = "100.64.0.2"
 			case "tailnet":

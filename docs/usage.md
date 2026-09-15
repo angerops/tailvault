@@ -10,6 +10,11 @@ Your address is saved in `~/Library/Application Support/TailVault/settings.json`
 Change it in **Settings** (⌘,), which is available even while Tailscale is offline.
 Saving a new address clears the old view and reconnects.
 
+**Open vault** shows progress while TailVault checks your local Tailscale
+connection, then loads secret metadata from your saved server. If a step fails
+or times out, the app shows an error and lets you try again. You do not need to
+run a curl command before opening the vault.
+
 Your Tailscale ACLs define which secrets you can list, read, and change. Setec
 enforces those permissions. Seeing a secret in the list does not necessarily
 mean you have permission to reveal or edit it.

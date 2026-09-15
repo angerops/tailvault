@@ -483,6 +483,175 @@ test("Tailscale disconnection hides the view and reconnect works without sign-in
   assert.deepEqual(errors, []);
 });
 
+test("Open vault responds across the whole button and shows progress during one pending attempt", async () => {
+  for (const region of ["label", "arrow", "left", "right", "top", "bottom"]) {
+    await click("lock");
+    const opening = page.getByRole("button", { name: "Open vault", exact: true });
+    await opening.waitFor();
+    let release;
+    const gate = new Promise(resolve => { release = resolve; });
+    let calls = 0;
+    await page.route("**/ui-api/session", async route => {
+      calls++;
+      await gate;
+      await route.continue();
+    });
+    try {
+      const box = await opening.boundingBox();
+      const arrow = await opening.locator("svg").boundingBox();
+      const points = {
+        label: [box.x + 80, box.y + box.height / 2],
+        arrow: [arrow.x + arrow.width / 2, arrow.y + arrow.height / 2],
+        left: [box.x + 3, box.y + box.height / 2],
+        right: [box.x + box.width - 3, box.y + box.height / 2],
+        top: [box.x + box.width / 2, box.y + 3],
+        bottom: [box.x + box.width / 2, box.y + box.height - 3],
+      };
+      const [x, y] = points[region];
+      assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y)?.closest("button")?.dataset.action, [x, y]), "open-vault", region);
+      await page.mouse.click(x, y);
+      await page.getByRole("status").getByText("Checking Tailscale…", { exact: true }).waitFor({ timeout: 2000 });
+      assert.equal(await page.getByRole("button", { name: "Opening…", exact: true }).isDisabled(), true, region);
+      await page.evaluate(() => window.tailvaultAction("open-vault"));
+      assert.equal(calls, 1, region);
+    } finally {
+      release();
+    }
+    await page.locator(".secret-row").first().waitFor();
+    await page.unroute("**/ui-api/session");
+  }
+  assert.deepEqual(errors, []);
+});
+
+test("an unexpected opening abort is shown and the next attempt can succeed", async () => {
+  await click("lock");
+  await page.evaluate(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (url === "/ui-api/session") {
+        window.fetch = original;
+        return Promise.reject(new DOMException("Synthetic native interruption", "AbortError"));
+      }
+      return original(url, options);
+    };
+  });
+  await click("open-vault");
+  await page.getByRole("alert").getByText("Opening the vault was interrupted. Try again.", { exact: true }).waitFor({ timeout: 2000 });
+  assert.equal(await page.getByRole("button", { name: "Open vault", exact: true }).isEnabled(), true);
+  await click("open-vault");
+  await page.locator(".secret-row").first().waitFor();
+  assert.deepEqual(errors, []);
+});
+
+test("a stalled identity check times out, permits retry, and ignores its late response", async () => {
+  await click("lock");
+  await page.clock.install();
+  await page.evaluate(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (url === "/ui-api/session") {
+        window.fetch = original;
+        // Model a native transport that completes even after being canceled.
+        return new Promise(resolve => { window.finishStaleOpening = () => resolve(new Response("obsolete identity failure", { status: 401 })); });
+      }
+      return original(url, options);
+    };
+  });
+  await click("open-vault");
+  await page.clock.fastForward(10001);
+  await page.getByRole("alert").getByText("Tailscale’s local connection did not respond within 10 seconds. Try again.", { exact: true }).waitFor({ timeout: 2000 });
+  assert.equal(await page.getByRole("button", { name: "Open vault", exact: true }).isEnabled(), true);
+  await click("open-vault");
+  await page.locator(".secret-row").first().waitFor();
+  await page.evaluate(async () => {
+    window.finishStaleOpening();
+    await new Promise(resolve => setTimeout(resolve, 0));
+  });
+  assert.equal(await page.locator(".secret-row").count(), 10);
+  assert.equal(await page.getByText("obsolete identity failure", { exact: true }).count(), 0);
+  assert.deepEqual(errors, []);
+});
+
+test("opening with Enter or Space surfaces an identity error on every attempt", async () => {
+  await click("lock");
+  fixture.connected = false;
+  for (const key of ["Enter", "Space"]) {
+    await page.getByRole("button", { name: "Open vault", exact: true }).focus();
+    await page.keyboard.press(key);
+    await page.getByRole("alert").getByText("Connect Tailscale to open the vault.", { exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Open vault", exact: true }).isEnabled(), true);
+  }
+  assert.deepEqual(errors, []);
+});
+
+test("a stalled initial secret list reports a timeout and can be retried", async () => {
+  await click("lock");
+  await page.clock.install();
+  await page.evaluate(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (url === "/ui-api/list") {
+        window.fetch = original;
+        return new Promise(() => {});
+      }
+      return original(url, options);
+    };
+  });
+  await click("open-vault");
+  await page.getByText("Loading secrets…", { exact: true }).waitFor();
+  await page.clock.fastForward(35001);
+  await page.getByText("Loading secrets timed out. Check Tailscale and your server address, then try again.", { exact: true }).waitFor();
+  assert.equal(await page.locator(".secret-row").count(), 0);
+  await page.getByRole("button", { name: "Try again", exact: true }).click();
+  await page.locator(".secret-row").first().waitFor();
+  assert.deepEqual(errors, []);
+});
+
+test("a stalled settings read on launch reports its stage and Open vault can retry", async () => {
+  await page.clock.install();
+  await page.addInitScript(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (url === "/ui-api/settings") {
+        window.fetch = original;
+        return new Promise(() => {});
+      }
+      return original(url, options);
+    };
+  });
+  await page.reload();
+  await page.getByRole("status").getByText("Loading settings…", { exact: true }).waitFor();
+  await page.clock.fastForward(10001);
+  await page.getByRole("alert").getByText("TailVault’s settings did not respond within 10 seconds. Try again.", { exact: true }).waitFor();
+  await click("open-vault");
+  await page.locator(".secret-row").first().waitFor();
+  assert.deepEqual(errors, []);
+});
+
+test("changing settings cancels a pending opening without showing a cancellation error", async () => {
+  await click("lock");
+  await page.evaluate(() => {
+    const original = window.fetch;
+    window.fetch = (url, options) => {
+      if (url === "/ui-api/session") {
+        window.fetch = original;
+        return new Promise((resolve, reject) => options.signal.addEventListener("abort", () => reject(new DOMException("Vault hidden", "AbortError"))));
+      }
+      return original(url, options);
+    };
+  });
+  await click("open-vault");
+  await page.getByRole("status").getByText("Checking Tailscale…", { exact: true }).waitFor();
+  await click("settings");
+  await page.getByRole("heading", { name: "Settings", exact: true }).waitFor();
+  assert.equal(await page.getByRole("alert").count(), 0);
+  await click("close-dialog");
+  assert.equal(await page.getByText("Opening the vault was interrupted. Try again.", { exact: true }).count(), 0);
+  await click("open-vault");
+  await page.locator(".secret-row").first().waitFor();
+  assert.deepEqual(errors, []);
+});
+
 test("curl previews and copies support active and pinned versions without reading values", async () => {
   await choose("platform/production/database-url");
   await nativeAction("copy-curl");
