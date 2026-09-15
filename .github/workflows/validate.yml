@@ -2,7 +2,7 @@ name: Validate
 
 on:
   push:
-    branches: ['**']
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -22,5 +22,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate app, provider contract, release recovery, and macOS package
+      - name: Run tests and static checks
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        run: bash scripts/ci-release.sh --checks-only
+      - name: Verify checks produced no application package
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        run: test ! -e bin
+      - name: Validate and package main
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: bash scripts/ci-release.sh
