@@ -12,6 +12,7 @@ import (
 	"github.com/angerops/tailvault/internal/portal"
 	"github.com/angerops/tailvault/internal/settings"
 	"tailscale.com/client/local"
+	"tailscale.com/ipn/ipnstate"
 )
 
 // Identity reads the active local profile on every request. Tagged machines do
@@ -21,15 +22,29 @@ func Identity(ctx context.Context) (portal.Identity, error) {
 	defer cancel()
 	var lc local.Client
 	s, err := lc.StatusWithoutPeers(ctx)
-	if err != nil || s == nil || s.BackendState != "Running" || s.Self == nil {
-		return portal.Identity{}, errors.New("Tailscale must be running")
+	return identityFromStatus(s, err)
+}
+
+func identityFromStatus(s *ipnstate.Status, err error) (portal.Identity, error) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return portal.Identity{}, portal.IdentityError("Tailscale’s local connection did not respond in time. Try again.")
+	}
+	if err != nil || s == nil {
+		return portal.Identity{}, portal.IdentityError("TailVault could not read Tailscale’s local connection. Check that Tailscale is connected, then try again.")
+	}
+	if s.BackendState != "Running" {
+		return portal.Identity{}, portal.IdentityError("Tailscale is disconnected. Connect Tailscale, then try again.")
+	}
+	if s.Self == nil {
+		return portal.Identity{}, portal.IdentityError("Your Tailscale device is not ready. Reconnect Tailscale, then try again.")
 	}
 	if s.Self.Tags != nil && s.Self.Tags.Len() > 0 {
-		return portal.Identity{}, errors.New("sign in to Tailscale as a user; tagged nodes are not supported")
+		return portal.Identity{}, portal.IdentityError("This device is tagged in Tailscale. TailVault needs a device signed in as a user.")
 	}
 	profile, ok := s.User[s.Self.UserID]
-	if !ok || profile.ID == 0 || s.Self.NodeID == 0 {
-		return portal.Identity{}, errors.New("active Tailscale user could not be identified")
+	// The stable ID predates the numeric NodeID field added in Tailscale 1.100.
+	if !ok || profile.ID == 0 || profile.ID != s.Self.UserID || s.Self.ID == "" {
+		return portal.Identity{}, portal.IdentityError("Your Tailscale user or device could not be identified. Reconnect Tailscale, then try again.")
 	}
 	var tailnetName, tailnetDNSName string
 	if s.CurrentTailnet != nil {
@@ -38,10 +53,10 @@ func Identity(ctx context.Context) (portal.Identity, error) {
 	}
 	for _, ip := range s.Self.TailscaleIPs {
 		if ip.Is4() {
-			return portal.Identity{UserID: int64(profile.ID), NodeID: int64(s.Self.NodeID), Name: profile.DisplayName, Login: profile.LoginName, IP: ip.String(), TailnetName: tailnetName, TailnetDNSName: tailnetDNSName}, nil
+			return portal.Identity{UserID: int64(profile.ID), NodeID: string(s.Self.ID), Name: profile.DisplayName, Login: profile.LoginName, IP: ip.String(), TailnetName: tailnetName, TailnetDNSName: tailnetDNSName}, nil
 		}
 	}
-	return portal.Identity{}, errors.New("no local Tailscale IPv4 address is available")
+	return portal.Identity{}, portal.IdentityError("Tailscale has no IPv4 address for this Mac. Check its connection, then try again.")
 }
 
 func ValidateServer(raw string) error {

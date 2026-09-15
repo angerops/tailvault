@@ -48,7 +48,7 @@ func TestProviderContract(t *testing.T) {
 	}})
 	hs := httptest.NewServer(ss.Mux)
 	defer hs.Close()
-	who := portal.Identity{UserID: 1, NodeID: 1, IP: "127.0.0.1", Login: "synthetic@example.test"}
+	who := portal.Identity{UserID: 1, NodeID: "n-fixture", IP: "127.0.0.1", Login: "synthetic@example.test"}
 	app, err := portal.New(portal.Config{
 		Server:   "https://secrets.example.ts.net",
 		Identity: func(context.Context) (portal.Identity, error) { return who, nil },

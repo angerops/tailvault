@@ -1103,6 +1103,11 @@ textarea:focus-visible {
   color: var(--muted);
   margin-bottom: 30px;
 }
+.login-card .connection-message {
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+}
 .login-lock {
   display: flex;
   justify-content: center;

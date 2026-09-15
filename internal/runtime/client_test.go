@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +11,71 @@ import (
 	"testing"
 
 	"github.com/angerops/tailvault/internal/portal"
+	"tailscale.com/ipn/ipnstate"
 )
+
+func connectedStatus(t *testing.T) *ipnstate.Status {
+	t.Helper()
+	// Older daemons supply the stable ID but omit the numeric NodeID field.
+	var status ipnstate.Status
+	if err := json.Unmarshal([]byte(`{
+		"BackendState":"Running",
+		"Self":{"ID":"n-fixture","UserID":123,"TailscaleIPs":["100.64.0.1"]},
+		"User":{"123":{"ID":123,"LoginName":"alice@example.test","DisplayName":"Alice"}},
+		"CurrentTailnet":{"Name":"Example team","MagicDNSSuffix":"example.ts.net"}
+	}`), &status); err != nil {
+		t.Fatal(err)
+	}
+	return &status
+}
+
+func TestIdentitySupportsStatusWithoutNumericNodeID(t *testing.T) {
+	want := portal.Identity{UserID: 123, NodeID: "n-fixture", Name: "Alice", Login: "alice@example.test", IP: "100.64.0.1", TailnetName: "Example team", TailnetDNSName: "example.ts.net"}
+	for _, includeNumericID := range []bool{false, true} {
+		s := connectedStatus(t)
+		if includeNumericID {
+			s.Self.NodeID = 456
+		}
+		got, err := identityFromStatus(s, nil)
+		if err != nil || got != want {
+			t.Fatalf("numeric ID present=%v: got %+v, %v", includeNumericID, got, err)
+		}
+	}
+}
+
+func TestIdentityFailuresAreDistinctAndContainNoDaemonDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		alter func(*ipnstate.Status)
+		err   error
+		want  string
+	}{
+		{"local API unavailable", nil, errors.New("synthetic credential marker"), "could not read Tailscale’s local connection"},
+		{"timeout", nil, context.DeadlineExceeded, "did not respond in time"},
+		{"disconnected", func(s *ipnstate.Status) { s.BackendState = "Stopped" }, nil, "Tailscale is disconnected"},
+		{"device missing", func(s *ipnstate.Status) { s.Self = nil }, nil, "device is not ready"},
+		{"user missing", func(s *ipnstate.Status) { s.User = nil }, nil, "user or device could not be identified"},
+		{"stable ID missing", func(s *ipnstate.Status) { s.Self.ID = "" }, nil, "user or device could not be identified"},
+		{"address missing", func(s *ipnstate.Status) { s.Self.TailscaleIPs = nil }, nil, "no IPv4 address"},
+		{"tagged", func(s *ipnstate.Status) {
+			if err := json.Unmarshal([]byte(`["tag:synthetic"]`), &s.Self.Tags); err != nil {
+				t.Fatal(err)
+			}
+		}, nil, "device is tagged"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s := connectedStatus(t)
+			if tc.alter != nil {
+				tc.alter(s)
+			}
+			who, err := identityFromStatus(s, tc.err)
+			var publicError portal.IdentityError
+			if who != (portal.Identity{}) || !errors.As(err, &publicError) || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), "synthetic credential marker") {
+				t.Fatalf("unexpected identity failure: %+v, %v", who, err)
+			}
+		})
+	}
+}
 
 func TestCommandPreservesIdentityAndBytesWithoutForwardingBrowserHeaders(t *testing.T) {
 	var path, remote, body string
@@ -22,7 +88,7 @@ func TestCommandPreservesIdentityAndBytesWithoutForwardingBrowserHeaders(t *test
 		io.WriteString(w, `{"Version":2,"Value":"AP8K"}`)
 	}))
 	defer server.Close()
-	who := portal.Identity{UserID: 123, NodeID: 456, IP: "127.0.0.1"}
+	who := portal.Identity{UserID: 123, NodeID: "n-fixture", IP: "127.0.0.1"}
 	// The test server uses HTTP; startup separately rejects non-HTTPS origins.
 	input := `{"Name":"team/../special?name","Value":"AP8K"}`
 	result, code, err := Command(context.Background(), who, server.URL, "put", []byte(input))

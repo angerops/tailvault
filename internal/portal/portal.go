@@ -28,10 +28,17 @@ const connectionHeader = "X-TailVault-Connection"
 
 // Identity is supplied by the local Tailscale daemon, never by the UI.
 type Identity struct {
-	UserID, NodeID              int64
+	UserID                      int64
+	NodeID                      string // Tailscale's stable node ID, available across client versions.
 	Name, Login, IP             string
 	TailnetName, TailnetDNSName string
 }
+
+// IdentityError contains a fixed, user-facing explanation. Raw daemon errors
+// must not cross this boundary: they may contain local paths or credentials.
+type IdentityError string
+
+func (e IdentityError) Error() string { return string(e) }
 
 type Config struct {
 	Server         string
@@ -141,8 +148,15 @@ func (p *Portal) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (p *Portal) peer(ctx context.Context) (Identity, error) {
 	who, err := p.cfg.Identity(ctx)
-	if err != nil || who.UserID == 0 || who.NodeID == 0 || who.IP == "" {
-		return Identity{}, errors.New("Connect Tailscale with a user-owned device, then open the vault.")
+	if err != nil {
+		var publicError IdentityError
+		if errors.As(err, &publicError) {
+			return Identity{}, publicError
+		}
+		return Identity{}, errors.New("TailVault could not read Tailscale’s local connection. Check that Tailscale is connected, then try again.")
+	}
+	if who.UserID == 0 || who.NodeID == "" || who.IP == "" {
+		return Identity{}, errors.New("Your Tailscale identity is incomplete. Reconnect Tailscale, then try again.")
 	}
 	return who, nil
 }
@@ -159,6 +173,10 @@ func (p *Portal) sessionInfo(w http.ResponseWriter, r *http.Request) {
 	who, err := p.peer(r.Context())
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	// A timed-out opening must not create or revoke a later attempt's view.
+	if r.Context().Err() != nil {
+		return
+	}
 	if p.server == "" {
 		http.Error(w, "Set up your Setec server to open the vault.", http.StatusPreconditionRequired)
 		return

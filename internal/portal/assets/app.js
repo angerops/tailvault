@@ -61,11 +61,16 @@ let connectionTimer,
   toastTimer,
   selectionSequence = 0;
 
-async function request(url, body) {
+async function request(url, body, { timeout = 0, timeoutMessage } = {}) {
   const controller = new AbortController();
   const epoch = state.epoch;
+  let timer;
   requests.add(controller);
-  try {
+  const checkCurrent = () => {
+    if (epoch !== state.epoch || controller.signal.aborted)
+      throw new DOMException("Vault request canceled", "AbortError");
+  };
+  const perform = async () => {
     const res = await fetch(url, {
       method: body === undefined ? "GET" : "POST",
       credentials: "omit",
@@ -78,26 +83,50 @@ async function request(url, body) {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    if (epoch !== state.epoch)
-      throw new DOMException("Vault locked", "AbortError");
+    checkCurrent();
     if (res.status === 401) {
       const message =
         (await res.text()).trim() || "Open the vault to reconnect.";
+      checkCurrent();
       lockView(message);
       throw new Error(message);
     }
-    if (!res.ok)
-      throw new Error(
-        (await res.text()).slice(0, 240).trim() ||
-          "The request could not be completed.",
-      );
+    if (!res.ok) {
+      const message = (await res.text()).slice(0, 240).trim();
+      checkCurrent();
+      throw new Error(message || "The request could not be completed.");
+    }
     const result = res.status === 204 ? null : await res.json();
-    if (epoch !== state.epoch) throw new DOMException("Vault hidden", "AbortError");
+    checkCurrent();
     return result;
+  };
+  try {
+    if (!timeout) return await perform();
+    // Bound the full response, even if the native transport ignores cancellation.
+    const deadline = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(new Error(timeoutMessage));
+        controller.abort();
+      }, timeout);
+    });
+    return await Promise.race([perform(), deadline]);
   } finally {
+    clearTimeout(timer);
     requests.delete(controller);
   }
 }
+const settingsDeadline = {
+  timeout: 10000,
+  timeoutMessage: "TailVault’s settings did not respond within 10 seconds. Try again.",
+};
+const identityDeadline = {
+  timeout: 10000,
+  timeoutMessage: "Tailscale’s local connection did not respond within 10 seconds. Try again.",
+};
+const listDeadline = {
+  timeout: 35000,
+  timeoutMessage: "Loading secrets timed out. Check Tailscale and your server address, then try again.",
+};
 const validVersion = (value) => Number.isInteger(value) && value > 0 && value <= 4294967295;
 function metadata(item) {
   if (!item || typeof item.Name !== "string" || !item.Name ||
@@ -108,8 +137,8 @@ function metadata(item) {
     throw new Error("Setec returned invalid secret metadata.");
   return { Name: item.Name, Versions: item.Versions, ActiveVersion: item.ActiveVersion };
 }
-async function api(op, body = {}) {
-  const result = await request(`/ui-api/${op}`, body);
+async function api(op, body = {}, options) {
+  const result = await request(`/ui-api/${op}`, body, options);
   if (op === "info") return metadata(result);
   if (op !== "list") return result;
   if (result === null) return [];
@@ -185,11 +214,13 @@ function lockView(message = "", preserveSettings = false) {
 
 function renderConnection() {
   if (state.settings && !state.settings.server) return renderOnboarding();
+  const pending = state.busy || settingsOpening;
+  const progress = settingsOpening ? "Opening settings…" : state.settings ? "Checking Tailscale…" : "Loading settings…";
   app.innerHTML = `<div class="login-page"><div class="login-brand"><img src="/icon.svg" alt="" width="32" height="32"><b>Tail<span class="wordmark-vault">Vault</span></b></div>
-    ${button("Settings", "settings", "settings", "connection-settings", 'title="Settings (⌘,)"')}
+    ${button("Settings", "settings", "settings", "connection-settings", `title="Settings (⌘,)"${!state.settings?.server || settingsOpening ? " disabled" : ""}`)}
     <main class="login-card"><img class="login-symbol" src="/icon.svg" alt="" width="88" height="88">
-    <h1>Tail<span class="wordmark-vault">Vault</span></h1>${state.error ? `<p>${esc(state.error)}</p>` : `<div class="login-lock" role="img" aria-label="Vault hidden">${icon("lock")}</div>`}
-    ${button("Open vault", "open-vault", "arrow", "primary login-button")}</main></div>`;
+    <h1>Tail<span class="wordmark-vault">Vault</span></h1>${pending ? `<p class="connection-message" role="status">${progress}</p>` : state.error ? `<p class="connection-message" role="alert">${esc(state.error)}</p>` : `<div class="login-lock" role="img" aria-label="Vault hidden">${icon("lock")}</div>`}
+    ${button(pending ? "Opening…" : "Open vault", "open-vault", "arrow", "primary login-button", pending ? 'disabled aria-busy="true"' : "")}</main></div>`;
 }
 
 const serverField = (server = "") => `<label class="form-label">Setec server<input name="server" type="url" required maxlength="2048" value="${esc(server)}" placeholder="https://secrets.example.ts.net" autocomplete="off" spellcheck="false" autocapitalize="off" aria-describedby="server-hint"></label><p id="server-hint" class="server-hint">Use the HTTPS address provided by your Setec administrator.</p>`;
@@ -238,12 +269,15 @@ function renderOnboarding() {
 let settingsOpening = false;
 async function openSettings() {
   if (dialog.open || settingsOpening || !state.settings?.server) return;
+  if (!state.session && state.busy) lockView();
   clearValue();
   settingsOpening = true;
+  if (!state.session) renderConnection();
   try {
-    state.settings = await request("/ui-api/settings");
+    state.settings = await request("/ui-api/settings", undefined, settingsDeadline);
   } finally {
     settingsOpening = false;
+    if (!state.session) renderConnection();
   }
   if (dialog.open) return;
   dialog.dataset.kind = "settings";
@@ -255,16 +289,22 @@ async function openSettings() {
 }
 
 async function initialize() {
+  if (state.busy) return;
+  const epoch = state.epoch;
+  state.busy = true;
+  state.error = "";
+  renderConnection();
   try {
-    state.settings = await request("/ui-api/settings");
-    if (!state.settings.server) renderOnboarding();
-    else await load(true);
+    state.settings = await request("/ui-api/settings", undefined, settingsDeadline);
   } catch (error) {
-    if (error.name !== "AbortError") {
-      state.error = "Settings could not be loaded. Reopen TailVault to try again.";
-      renderConnection();
-    }
+    if (epoch === state.epoch)
+      state.error = error?.name === "AbortError" ? "Loading settings was interrupted. Try again." : error?.message || "Settings could not be loaded. Try again.";
+  } finally {
+    if (epoch === state.epoch) state.busy = false;
   }
+  if (epoch !== state.epoch) return;
+  if (state.error || !state.settings?.server) renderConnection();
+  else await load(true);
 }
 
 let checkingConnection = false;
@@ -272,7 +312,7 @@ async function checkConnection() {
   if (!state.session || checkingConnection || dialog.dataset.kind === "settings") return;
   checkingConnection = true;
   try {
-    await request("/ui-api/status");
+    await request("/ui-api/status", undefined, identityDeadline);
   } catch (error) {
     if (error.name !== "AbortError" && state.session)
       lockView(
@@ -504,13 +544,15 @@ function versions(s) {
 async function load(initial = false) {
   // Refresh must never reopen a hidden or revoked view.
   if (!initial && !state.session) return;
-  if (!state.settings?.server) return initial ? initialize() : undefined;
   if (state.busy) return;
+  if (!state.settings?.server) return initial ? initialize() : undefined;
   state.busy = true;
   const epoch = state.epoch;
   try {
     if (initial) {
-      const session = await request("/ui-api/session");
+      state.error = "";
+      renderConnection();
+      const session = await request("/ui-api/session", undefined, identityDeadline);
       if (epoch !== state.epoch) return;
       state.session = session;
       clearInterval(connectionTimer);
@@ -518,7 +560,7 @@ async function load(initial = false) {
       state.loading = true;
       render();
     }
-    const secrets = await api("list");
+    const secrets = await api("list", {}, listDeadline);
     if (epoch !== state.epoch) return;
     state.secrets = (secrets || []).sort((a, b) =>
       a.Name.localeCompare(b.Name),
@@ -534,18 +576,23 @@ async function load(initial = false) {
     state.loading = false;
     render();
   } catch (error) {
-    if (error.name !== "AbortError" && state.session && epoch === state.epoch) {
+    // Only a view change is an intentional cancellation. Native transport
+    // AbortErrors must still explain why this attempt did not open the vault.
+    if (epoch !== state.epoch) return;
+    state.error = error?.name === "AbortError"
+      ? initial ? "Opening the vault was interrupted. Try again." : "Loading secrets was interrupted. Try again."
+      : error?.message || "The vault could not be opened. Try again.";
+    if (state.session) {
       state.secrets = [];
       state.selected = null;
       state.loading = false;
-      state.error = error.message;
       render();
-    } else if (error.name !== "AbortError" && !state.session) {
-      if (epoch === state.epoch) state.error = error.message;
-      renderConnection();
     }
   } finally {
-    if (epoch === state.epoch) state.busy = false;
+    if (epoch === state.epoch) {
+      state.busy = false;
+      if (!state.session) renderConnection();
+    }
   }
 }
 
@@ -798,6 +845,7 @@ async function dispatchAction(action, target) {
       (!target || !dialog.contains(target) || dialog.dataset.saving)) return;
   if (settingsOpening && action !== "lock") return;
   if (!["settings", "open-vault", "close-dialog"].includes(action) && !state.session) return;
+  const epoch = state.epoch;
   try {
     switch (action) {
       case "search":
@@ -886,7 +934,9 @@ async function dispatchAction(action, target) {
       }
     }
   } catch (error) {
-    if (error.name !== "AbortError" && (state.session || action === "settings"))
+    if (action === "open-vault" && epoch === state.epoch)
+      lockView("The vault could not be opened. Try again.");
+    else if (error?.name !== "AbortError" && (state.session || action === "settings"))
       notify(error.message, true);
   }
 }
