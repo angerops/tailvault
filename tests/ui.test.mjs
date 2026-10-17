@@ -113,7 +113,59 @@ test("only metadata loads initially; reveal, mask, search, paths, keyboard, and 
   assert.deepEqual(errors, []);
 });
 
-test("create, stage an edit, activate, import a version, and confirm deletion", async () => {
+test("new versions start with an empty input and preserve existing values", async () => {
+  const name = "personal/github/token";
+  const original = structuredClone(fixture.secrets.get(name));
+  await choose(name);
+  await page.getByRole("button", { name: "New version", exact: true }).click();
+  await page.getByRole("heading", { name: "New version", exact: true }).waitFor();
+  const value = page.getByLabel("New value", { exact: true });
+  const shown = page.getByRole("checkbox", { name: "Show entered value", exact: true });
+  assert.equal(await value.inputValue(), "");
+  assert.equal(await shown.isDisabled(), true);
+  assert.equal(fixture.calls.some(c => c.op === "get"), false);
+  await value.fill("new-version-value");
+  await shown.check();
+  assert.doesNotMatch(await value.getAttribute("class"), /secret-input/);
+  await shown.uncheck();
+  assert.match(await value.getAttribute("class"), /secret-input/);
+  await submit();
+  await closed();
+  const saved = fixture.secrets.get(name);
+  assert.equal(saved.ActiveVersion, original.ActiveVersion);
+  assert.equal(saved.Values[1], original.Values[1]);
+  assert.equal(Buffer.from(saved.Values[2], "base64").toString(), "new-version-value");
+  assert.equal(fixture.calls.some(c => c.op === "get" || c.op === "activate"), false);
+  assert.deepEqual(errors, []);
+});
+
+test("entered-value visibility follows text and generated passwords in each secret form", async () => {
+  for (const action of ["new", "new-version", "import"]) {
+    await choose("personal/github/token");
+    if (action === "import") await page.getByRole("tab", { name: /Versions/ }).click();
+    await click(action);
+    const value = page.locator('textarea[name="value"]');
+    const shown = page.getByRole("checkbox", { name: "Show entered value", exact: true });
+    assert.equal(await shown.isDisabled(), true);
+    await click("generate");
+    assert.ok((await value.inputValue()).length > 0);
+    assert.equal(await shown.isDisabled(), false);
+    await shown.check();
+    assert.doesNotMatch(await value.getAttribute("class"), /secret-input/);
+    await value.fill("");
+    assert.equal(await shown.isDisabled(), true);
+    assert.equal(await shown.isChecked(), false);
+    assert.match(await value.getAttribute("class"), /secret-input/);
+    await value.fill("typed-value");
+    assert.equal(await shown.isDisabled(), false);
+    assert.match(await value.getAttribute("class"), /secret-input/);
+    await click("close-dialog");
+  }
+  assert.equal(fixture.calls.some(c => c.op === "get"), false);
+  assert.deepEqual(errors, []);
+});
+
+test("create, stage a new version, activate, import a version, and confirm deletion", async () => {
   await click("new");
   assert.equal(await page.getByRole("checkbox", { name: "Activate this version after saving" }).count(), 0);
   await page.locator('input[name="name"]').fill("personal/tests/new-key");
@@ -122,7 +174,7 @@ test("create, stage an edit, activate, import a version, and confirm deletion", 
   await closed();
   assert.equal(fixture.secrets.get("personal/tests/new-key").ActiveVersion, 1);
   assert.equal(fixture.calls.some((c) => c.op === "activate"), false);
-  await click("edit");
+  await click("new-version");
   assert.equal(await page.getByRole("checkbox", { name: "Activate this version after saving" }).isChecked(), false);
   await page.locator("textarea").fill("second-value");
   await submit();
@@ -410,7 +462,7 @@ test("uploads and downloads preserve binary bytes", async () => {
 
 test("denied paths and writes surface errors without leaking values or changing secrets", async () => {
   await choose("platform/production/database-url");
-  await click("edit");
+  await click("new-version");
   await page.locator("textarea").fill("not-saved");
   await submit();
   await page.locator("#form-error").waitFor();
@@ -866,7 +918,7 @@ test("VIEW-1: canceled activation never reopens a hidden or revoked view", async
     fixture.reset();
     await page.reload();
     await choose("personal/github/token");
-    await click("edit");
+    await click("new-version");
     await page.locator("textarea").fill("replacement-value");
     await page.locator('input[name="activate"]').check();
     let release;
@@ -901,7 +953,7 @@ test("VIEW-1: canceled activation never reopens a hidden or revoked view", async
 
 test("MENU-1: native commands preserve drafts and cannot replace a saving dialog", async () => {
   await choose("personal/github/token");
-  await click("edit");
+  await click("new-version");
   await page.locator("textarea").fill("draft-to-preserve");
   for (const action of ["new", "refresh", "search", "settings"]) {
     await page.evaluate(action => window.tailvaultAction(action), action);
