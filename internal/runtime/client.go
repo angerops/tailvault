@@ -15,13 +15,18 @@ import (
 	"tailscale.com/ipn/ipnstate"
 )
 
+// IdentityClient reuses connections to the local Tailscale daemon. Its zero
+// value is ready for concurrent use and should be kept for the app's lifetime.
+type IdentityClient struct {
+	client local.Client
+}
+
 // Identity reads the active local profile on every request. Tagged machines do
 // not have a human identity and are not supported by this desktop client.
-func Identity(ctx context.Context) (portal.Identity, error) {
+func (c *IdentityClient) Identity(ctx context.Context) (portal.Identity, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	var lc local.Client
-	s, err := lc.StatusWithoutPeers(ctx)
+	s, err := c.client.StatusWithoutPeers(ctx)
 	return identityFromStatus(s, err)
 }
 
