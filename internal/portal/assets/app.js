@@ -24,7 +24,6 @@ const paths = {
   copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M15 8V3H3v13h5"/>',
   download: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
   upload: '<path d="M12 16V4m-5 5 5-5 5 5M4 16v5h16v-5"/>',
-  edit: '<path d="m15 4 5 5L9 20H4v-5L15 4Zm-3 3 5 5"/>',
   trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
   arrow: '<path d="M5 12h14m-5-5 5 5-5 5"/>',
   chevron: '<path d="m9 5 7 7-7 7"/>',
@@ -335,10 +334,11 @@ function kind(name) {
   return /\.(pem|crt|key|json|yaml|yml|env|txt)$/.test(name) ? "file" : "key";
 }
 function visible() {
-  return state.secrets.filter(
-    (s) =>
-      (!state.path || s.Name.startsWith(state.path + "/")) &&
-      s.Name.toLowerCase().includes(state.query.toLowerCase()),
+  const query = state.query.toLowerCase();
+  return state.secrets.filter((s) =>
+    query
+      ? s.Name.toLowerCase().includes(query)
+      : !state.path || s.Name.startsWith(state.path + "/"),
   );
 }
 function allPaths() {
@@ -370,9 +370,9 @@ function pathTree() {
         const hasChildren = children.has(path);
         const collapsed = state.collapsedPaths.has(path);
         const label = `${collapsed ? "Expand" : "Collapse"} ${path}`;
-        return `<li><div class="path-row ${state.path === path ? "active" : ""}">
+        return `<li><div class="path-row">
         ${hasChildren ? button('<span aria-hidden="true">/</span>', "toggle-path", "", "path-toggle", `data-path="${esc(path)}" aria-label="${esc(label)}" aria-expanded="${!collapsed}" aria-controls="${ids.get(path)}"`) : '<span class="path-toggle-space" aria-hidden="true"></span>'}
-        <button type="button" class="nav-item ${state.path === path ? "active" : ""}" data-action="path" data-path="${esc(path)}" aria-label="${esc(path)}" ${state.path === path ? 'aria-current="location"' : ""}><span>${esc(basename(path))}</span></button>
+        <button type="button" class="nav-item" data-action="path" data-path="${esc(path)}" aria-label="${esc(path)}"><span>${esc(basename(path))}</span></button>
         </div>${hasChildren ? `<ul class="path-tree" id="${ids.get(path)}" ${collapsed ? "hidden" : ""}>${branch(path)}</ul>` : ""}</li>`;
       })
       .join("");
@@ -398,7 +398,7 @@ function render() {
   app.innerHTML = `<div class="workspace">
     <aside class="sidebar"><a href="/" class="brand"><img src="/icon.svg" alt="" width="35" height="35"><b>Tail<span class="wordmark-vault">Vault</span></b></a>
       <label class="search">${icon("search")}<input id="search" type="search" autocomplete="off" placeholder="Search…" aria-label="Search secrets" value="${esc(state.query)}"><kbd>⌘ K</kbd></label>
-      <nav aria-label="Vault paths"><button class="nav-item ${!state.path ? "active" : ""}" data-action="path" data-path="">${icon("vault")}<span>All secrets</span><span class="count">${state.secrets.length}</span></button>
+      <nav aria-label="Vault paths"><button class="nav-item" data-action="path" data-path="">${icon("vault")}<span>All secrets</span><span class="count">${state.secrets.length}</span></button>
       <div class="side-heading path-heading">PATHS<span>${allPaths().length}</span></div><div id="paths">${pathTree()}</div></nav>
       <div class="sidebar-bottom">
       ${button("Settings", "settings", "settings", "sidebar-settings", 'title="Settings (⌘,)"')}
@@ -406,7 +406,7 @@ function render() {
     </aside>
     <section class="main">
       ${state.session.preview ? '<div class="preview-banner">INTERFACE PREVIEW · SAMPLE DATA ONLY</div>' : ""}
-      <div class="vault-content"><section class="secret-list" aria-label="Secrets"><header class="list-heading"><div class="vault-heading"><h1 id="view-title" title="${esc(state.path || "All secrets")}">${esc(state.path ? basename(state.path) : "All secrets")}</h1><span id="view-count" class="view-count">${visible().length}</span></div>${button("", "refresh", "refresh", "icon-button", 'aria-label="Refresh secrets" title="Refresh secrets"')}</header><div class="secret-list-body"><div id="secret-rows"></div><div id="list-scrollbar" class="list-scrollbar" aria-hidden="true"><div></div></div></div></section>
+      <div class="vault-content"><section class="secret-list" aria-label="Secrets"><header class="list-heading"><div class="vault-heading"><h1 id="view-title"></h1><span id="view-count" class="view-count"></span></div>${button("", "refresh", "refresh", "icon-button", 'aria-label="Refresh secrets" title="Refresh secrets"')}</header><div class="secret-list-body"><div id="secret-rows"></div><div id="list-scrollbar" class="list-scrollbar" aria-hidden="true"><div></div></div></div></section>
       <div class="detail-pane"><header class="vault-actions">${button("", "new", "plus", "primary icon-button", 'aria-label="New secret" title="New secret (⌘N)"')}</header><section id="detail" class="detail" aria-label="Secret details"></section></div></div>
     </section></div>`;
   renderRows();
@@ -417,6 +417,17 @@ function renderRows() {
   const rows = $("#secret-rows");
   if (!rows) return;
   const matches = visible();
+  const path = state.query ? "" : state.path;
+  const title = $("#view-title");
+  title.textContent = state.query ? "Search results" : path ? basename(path) : "All secrets";
+  title.title = state.query ? "Search results" : path || "All secrets";
+  for (const item of document.querySelectorAll('[data-action="path"]')) {
+    const active = item.dataset.path === path;
+    item.classList.toggle("active", active);
+    item.closest(".path-row")?.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "location");
+    else item.removeAttribute("aria-current");
+  }
   $("#view-count").textContent = matches.length;
   rows.innerHTML = state.loading
     ? '<div class="list-empty" role="status">Loading secrets…</div>'
@@ -450,7 +461,7 @@ function renderDetail() {
     detail.innerHTML = `<div class="detail-empty"><img class="empty-illustration" src="/icon.svg" alt="" width="88" height="88"><h2>No secret selected</h2><p>Select a secret to view its details.</p>${button("New secret", "new", "plus", "primary")}</div>`;
     return;
   }
-  detail.innerHTML = `<div class="detail-header"><span class="secret-icon hero-icon ${kind(s.Name)}">${icon(kind(s.Name))}</span><div class="detail-heading"><h2>${esc(basename(s.Name))}</h2><div class="detail-path"><code>${esc(s.Name)}</code>${button("", "copy-path", "copy", "icon-button", 'aria-label="Copy secret path" title="Copy path"')}</div></div>${button("Edit", "edit", "edit", "outlined")}</div>
+  detail.innerHTML = `<div class="detail-header"><span class="secret-icon hero-icon ${kind(s.Name)}">${icon(kind(s.Name))}</span><div class="detail-heading"><h2>${esc(basename(s.Name))}</h2><div class="detail-path"><code>${esc(s.Name)}</code>${button("", "copy-path", "copy", "icon-button", 'aria-label="Copy secret path" title="Copy path"')}</div></div>${button("New version", "new-version", "plus", "outlined")}</div>
     <div class="detail-tabs" role="tablist" aria-label="Secret views"><button role="tab" aria-selected="${state.tab === "overview"}" data-action="tab" data-tab="overview" class="${state.tab === "overview" ? "active" : ""}">Overview</button><button role="tab" aria-selected="${state.tab === "versions"}" data-action="tab" data-tab="versions" class="${state.tab === "versions" ? "active" : ""}">Versions <span>${s.Versions?.length ?? "—"}</span></button><button role="tab" aria-selected="${state.tab === "terminal"}" data-action="tab" data-tab="terminal" class="${state.tab === "terminal" ? "active" : ""}">Use in terminal</button></div>
     <div class="detail-body">${state.tab === "overview" ? overview(s) : state.tab === "versions" ? versions(s) : terminal(s)}</div>
     <div class="detail-bottom">${icon("shield")}Access controlled by Setec${button("Delete secret", "delete", "trash", "danger subtle")}</div>`;
@@ -659,7 +670,7 @@ function textValue(bytes) {
   }
 }
 
-function editSecret(mode = "new") {
+function openSecretEditor(mode = "new") {
   if (dialog.open || settingsOpening || !state.session) return;
   const epoch = state.epoch;
   const s = state.selected;
@@ -669,14 +680,14 @@ function editSecret(mode = "new") {
     mode === "import"
       ? "Import a specific version"
       : existing
-        ? "Save a new version"
+        ? "New version"
         : "New secret",
     `
-    <p class="modal-description">${mode === "import" ? "Import an unused version number. Setec immediately makes this version active." : existing ? "Enter a replacement value. Existing versions remain available." : "Give your secret a path, then add a value or upload a file."}</p>
+    <p class="modal-description">${mode === "import" ? "Import an unused version number. Setec immediately makes this version active." : existing ? "Enter a new value. Existing versions are not changed." : "Give your secret a path, then add a value or upload a file."}</p>
     <label class="form-label">Secret path<input name="name" required maxlength="4096" placeholder="personal/service/api-key" value="${esc(name)}" ${existing ? "readonly" : ""} autocomplete="off" spellcheck="false"></label>
     ${mode === "import" ? '<label class="form-label">Version number<input name="version" required type="number" min="1" max="4294967295" step="1" placeholder="e.g. 5"></label>' : ""}
-    <label class="form-label">Value<textarea name="value" rows="5" placeholder="Enter the secret value…" autocomplete="off" spellcheck="false" autocapitalize="off" class="secret-input"></textarea></label>
-    <div class="editor-tools"><label class="checkbox"><input id="show-input" type="checkbox">Show value</label>${button("Generate password", "generate", "key", "subtle")}</div>
+    <label class="form-label">${mode === "version" ? "New value" : "Value"}<textarea name="value" rows="5" placeholder="${mode === "version" ? "Enter the new value…" : "Enter the secret value…"}" autocomplete="off" spellcheck="false" autocapitalize="off" class="secret-input"></textarea></label>
+    <div class="editor-tools"><label class="checkbox"><input id="show-input" type="checkbox" disabled>Show entered value</label>${button("Generate password", "generate", "key", "subtle")}</div>
     <label class="file-drop">${icon("upload")}<strong>Or choose a file</strong><span>Up to 1 MiB · file bytes are preserved</span><span class="file-picker" aria-hidden="true">Choose file</span><span class="file-name" id="selected-file" aria-live="polite">No file selected</span><input name="file" type="file" aria-label="Upload a secret file" aria-describedby="selected-file"></label>
     <label class="checkbox"><input name="empty" type="checkbox">Allow an empty value</label>
     ${existing && mode !== "import" ? '<label class="checkbox"><input name="activate" type="checkbox">Activate this version after saving</label>' : ""}`,
@@ -742,10 +753,19 @@ function editSecret(mode = "new") {
       renderDetail();
       notify(message);
     },
-    mode === "import" ? "Import and activate" : "Save version",
+    mode === "import" ? "Import and activate" : existing ? "Save version" : "Save secret",
   );
-  $("#show-input").addEventListener("change", (e) =>
-    $("textarea", dialog).classList.toggle("secret-input", !e.target.checked),
+  const valueInput = $('textarea[name="value"]', dialog);
+  const showInput = $("#show-input", dialog);
+  valueInput.addEventListener("input", () => {
+    showInput.disabled = valueInput.value.length === 0;
+    if (showInput.disabled) {
+      showInput.checked = false;
+      valueInput.classList.add("secret-input");
+    }
+  });
+  showInput.addEventListener("change", () =>
+    valueInput.classList.toggle("secret-input", !showInput.checked),
   );
 }
 
@@ -894,13 +914,13 @@ async function dispatchAction(action, target) {
         await load();
         break;
       case "new":
-        editSecret();
+        openSecretEditor();
         break;
-      case "edit":
-        editSecret("edit");
+      case "new-version":
+        openSecretEditor("version");
         break;
       case "import":
-        editSecret("import");
+        openSecretEditor("import");
         break;
       case "close-dialog":
         dialog.close();
@@ -928,7 +948,9 @@ async function dispatchAction(action, target) {
         break;
       case "generate": {
         const bytes = crypto.getRandomValues(new Uint8Array(24));
-        $("textarea", dialog).value = bytesToBase64(bytes);
+        const valueInput = $('textarea[name="value"]', dialog);
+        valueInput.value = bytesToBase64(bytes);
+        valueInput.dispatchEvent(new Event("input", { bubbles: true }));
         bytes.fill(0);
         break;
       }
@@ -1032,7 +1054,7 @@ document.addEventListener("drop", (event) => {
   event.preventDefault();
   const input = $('input[type="file"]', dialog);
   if (!dialog.open || !input || dialog.dataset.saving) {
-    notify("Open New secret or Edit to drop a file.");
+    notify("Open New secret or New version to drop a file.");
     return;
   }
   if (event.dataTransfer.files.length !== 1) {

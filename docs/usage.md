@@ -21,10 +21,12 @@ mean you have permission to reveal or edit it.
 
 ## Manage secrets
 
-- Search names or expand paths in the sidebar, then select a secret.
+- Search names and paths across all secrets you can list, or browse paths in
+  the sidebar. Clearing search returns to the selected path.
 - Use **+** to create a secret from text, a generated password, or a file.
-- Use **Edit** to save a new version. **Activate** makes a version current.
-  Setec may reuse the latest version if you save the same bytes again.
+- Use **New version** to enter a new value; existing versions are not modified.
+  **Activate** makes a version current. Saving the same bytes as the latest
+  version reuses that version.
 - Reveal versions independently to compare them, or copy or download a value.
   Revealed values hide after 30 seconds or when the app loses focus.
 - **Copy curl** copies a command for fetching the active version. **Use in
