@@ -334,10 +334,11 @@ function kind(name) {
   return /\.(pem|crt|key|json|yaml|yml|env|txt)$/.test(name) ? "file" : "key";
 }
 function visible() {
-  return state.secrets.filter(
-    (s) =>
-      (!state.path || s.Name.startsWith(state.path + "/")) &&
-      s.Name.toLowerCase().includes(state.query.toLowerCase()),
+  const query = state.query.toLowerCase();
+  return state.secrets.filter((s) =>
+    query
+      ? s.Name.toLowerCase().includes(query)
+      : !state.path || s.Name.startsWith(state.path + "/"),
   );
 }
 function allPaths() {
@@ -369,9 +370,9 @@ function pathTree() {
         const hasChildren = children.has(path);
         const collapsed = state.collapsedPaths.has(path);
         const label = `${collapsed ? "Expand" : "Collapse"} ${path}`;
-        return `<li><div class="path-row ${state.path === path ? "active" : ""}">
+        return `<li><div class="path-row">
         ${hasChildren ? button('<span aria-hidden="true">/</span>', "toggle-path", "", "path-toggle", `data-path="${esc(path)}" aria-label="${esc(label)}" aria-expanded="${!collapsed}" aria-controls="${ids.get(path)}"`) : '<span class="path-toggle-space" aria-hidden="true"></span>'}
-        <button type="button" class="nav-item ${state.path === path ? "active" : ""}" data-action="path" data-path="${esc(path)}" aria-label="${esc(path)}" ${state.path === path ? 'aria-current="location"' : ""}><span>${esc(basename(path))}</span></button>
+        <button type="button" class="nav-item" data-action="path" data-path="${esc(path)}" aria-label="${esc(path)}"><span>${esc(basename(path))}</span></button>
         </div>${hasChildren ? `<ul class="path-tree" id="${ids.get(path)}" ${collapsed ? "hidden" : ""}>${branch(path)}</ul>` : ""}</li>`;
       })
       .join("");
@@ -397,7 +398,7 @@ function render() {
   app.innerHTML = `<div class="workspace">
     <aside class="sidebar"><a href="/" class="brand"><img src="/icon.svg" alt="" width="35" height="35"><b>Tail<span class="wordmark-vault">Vault</span></b></a>
       <label class="search">${icon("search")}<input id="search" type="search" autocomplete="off" placeholder="Search…" aria-label="Search secrets" value="${esc(state.query)}"><kbd>⌘ K</kbd></label>
-      <nav aria-label="Vault paths"><button class="nav-item ${!state.path ? "active" : ""}" data-action="path" data-path="">${icon("vault")}<span>All secrets</span><span class="count">${state.secrets.length}</span></button>
+      <nav aria-label="Vault paths"><button class="nav-item" data-action="path" data-path="">${icon("vault")}<span>All secrets</span><span class="count">${state.secrets.length}</span></button>
       <div class="side-heading path-heading">PATHS<span>${allPaths().length}</span></div><div id="paths">${pathTree()}</div></nav>
       <div class="sidebar-bottom">
       ${button("Settings", "settings", "settings", "sidebar-settings", 'title="Settings (⌘,)"')}
@@ -405,7 +406,7 @@ function render() {
     </aside>
     <section class="main">
       ${state.session.preview ? '<div class="preview-banner">INTERFACE PREVIEW · SAMPLE DATA ONLY</div>' : ""}
-      <div class="vault-content"><section class="secret-list" aria-label="Secrets"><header class="list-heading"><div class="vault-heading"><h1 id="view-title" title="${esc(state.path || "All secrets")}">${esc(state.path ? basename(state.path) : "All secrets")}</h1><span id="view-count" class="view-count">${visible().length}</span></div>${button("", "refresh", "refresh", "icon-button", 'aria-label="Refresh secrets" title="Refresh secrets"')}</header><div class="secret-list-body"><div id="secret-rows"></div><div id="list-scrollbar" class="list-scrollbar" aria-hidden="true"><div></div></div></div></section>
+      <div class="vault-content"><section class="secret-list" aria-label="Secrets"><header class="list-heading"><div class="vault-heading"><h1 id="view-title"></h1><span id="view-count" class="view-count"></span></div>${button("", "refresh", "refresh", "icon-button", 'aria-label="Refresh secrets" title="Refresh secrets"')}</header><div class="secret-list-body"><div id="secret-rows"></div><div id="list-scrollbar" class="list-scrollbar" aria-hidden="true"><div></div></div></div></section>
       <div class="detail-pane"><header class="vault-actions">${button("", "new", "plus", "primary icon-button", 'aria-label="New secret" title="New secret (⌘N)"')}</header><section id="detail" class="detail" aria-label="Secret details"></section></div></div>
     </section></div>`;
   renderRows();
@@ -416,6 +417,17 @@ function renderRows() {
   const rows = $("#secret-rows");
   if (!rows) return;
   const matches = visible();
+  const path = state.query ? "" : state.path;
+  const title = $("#view-title");
+  title.textContent = state.query ? "Search results" : path ? basename(path) : "All secrets";
+  title.title = state.query ? "Search results" : path || "All secrets";
+  for (const item of document.querySelectorAll('[data-action="path"]')) {
+    const active = item.dataset.path === path;
+    item.classList.toggle("active", active);
+    item.closest(".path-row")?.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "location");
+    else item.removeAttribute("aria-current");
+  }
   $("#view-count").textContent = matches.length;
   rows.innerHTML = state.loading
     ? '<div class="list-empty" role="status">Loading secrets…</div>'
