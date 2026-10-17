@@ -21,7 +21,8 @@ mean you have permission to reveal or edit it.
 
 ## Manage secrets
 
-- Search names or expand paths in the sidebar, then select a secret.
+- Search names and paths across all secrets you can list, or browse paths in
+  the sidebar. Clearing search returns to the selected path.
 - Use **+** to create a secret from text, a generated password, or a file.
 - Use **Edit** to save a new version. **Activate** makes a version current.
   Setec may reuse the latest version if you save the same bytes again.
