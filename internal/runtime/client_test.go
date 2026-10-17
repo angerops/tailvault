@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/angerops/tailvault/internal/portal"
+	"tailscale.com/client/local"
 	"tailscale.com/ipn/ipnstate"
 )
 
@@ -27,6 +31,90 @@ func connectedStatus(t *testing.T) *ipnstate.Status {
 		t.Fatal(err)
 	}
 	return &status
+}
+
+func TestIdentityClientReusesConnectionsWithoutCachingStatus(t *testing.T) {
+	var status atomic.Pointer[ipnstate.Status]
+	status.Store(connectedStatus(t))
+	var connections, requests atomic.Int64
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if r.Method != http.MethodGet || r.URL.Path != "/localapi/v0/status" || r.URL.RawQuery != "peers=false" {
+			t.Errorf("unexpected status request: %s %s", r.Method, r.URL)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status.Load())
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			connections.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+	client := &IdentityClient{client: local.Client{
+		OmitAuth: true,
+		Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var dialer net.Dialer
+			return dialer.DialContext(ctx, "tcp", server.Listener.Addr().String())
+		},
+	}}
+	for range 100 {
+		who, err := client.Identity(t.Context())
+		if err != nil || who.UserID != 123 || who.NodeID != "n-fixture" {
+			t.Fatalf("identity check failed: %+v, %v", who, err)
+		}
+	}
+	if requests.Load() != 100 || connections.Load() != 1 {
+		t.Fatalf("100 identity checks used %d requests and %d connections", requests.Load(), connections.Load())
+	}
+
+	next := connectedStatus(t)
+	profile := next.User[next.Self.UserID]
+	delete(next.User, next.Self.UserID)
+	profile.ID = 456
+	profile.LoginName = "bob@example.test"
+	next.User[profile.ID] = profile
+	next.Self.UserID = profile.ID
+	next.Self.ID = "n-next"
+	status.Store(next)
+	who, err := client.Identity(t.Context())
+	if err != nil || who.UserID != 456 || who.NodeID != "n-next" || who.Login != "bob@example.test" {
+		t.Fatalf("profile change was not observed: %+v, %v", who, err)
+	}
+
+	disconnected := connectedStatus(t)
+	disconnected.BackendState = "Stopped"
+	status.Store(disconnected)
+	if who, err := client.Identity(t.Context()); err == nil || who != (portal.Identity{}) {
+		t.Fatalf("disconnection returned a stale identity: %+v, %v", who, err)
+	}
+	status.Store(next)
+	server.CloseClientConnections()
+	if who, err := client.Identity(t.Context()); err != nil || who.UserID != 456 {
+		t.Fatalf("failed to reconnect to the local daemon: %+v, %v", who, err)
+	}
+	if connections.Load() != 2 {
+		t.Fatalf("expected one replacement connection, got %d", connections.Load())
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if who, err := client.Identity(ctx); err == nil || who != (portal.Identity{}) {
+		t.Fatalf("canceled check returned an identity: %+v, %v", who, err)
+	}
+	var checks sync.WaitGroup
+	for range 16 {
+		checks.Go(func() {
+			if who, err := client.Identity(t.Context()); err != nil || who.UserID != 456 {
+				t.Errorf("concurrent check failed: %+v, %v", who, err)
+			}
+		})
+	}
+	checks.Wait()
+	if requests.Load() != 119 {
+		t.Fatalf("each check must read fresh status; got %d requests", requests.Load())
+	}
 }
 
 func TestIdentitySupportsStatusWithoutNumericNodeID(t *testing.T) {

@@ -41,11 +41,12 @@ func main() {
 	if loadErr != nil {
 		settingsError = "Your saved server settings could not be read. Enter the address again to save a new configuration."
 	}
+	identityClient := &localruntime.IdentityClient{}
 	d.service, err = portal.New(portal.Config{
 		Server:         saved.Server,
 		SettingsError:  settingsError,
 		SaveServer:     store.Save,
-		Identity:       localruntime.Identity,
+		Identity:       identityClient.Identity,
 		Command:        localruntime.Command,
 		ChooseSavePath: d.chooseSavePath,
 		SaveFile:       saveFile,
